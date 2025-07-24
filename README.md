@@ -1,2 +1,2 @@
 # node-red-bluesky
-BlueSky Intergration for Node-RED
+Unofficial BlueSky Integration for Node-RED
