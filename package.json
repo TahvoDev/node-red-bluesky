@@ -1,0 +1,38 @@
+{
+  "name": "node-red-bluesky",
+  "version": "0.0.1",
+  "description": "Unofficial BlueSky Intergration for Node-RED",
+  "main": "index.js",
+  "scripts": {
+    "build": "(rm -rf dist || true) && ttsc && npm run copy-static-assets",
+    "copy-static-assets": "node scripts/copy-static-assets.js",
+    "node-red-check": "node-red-dev validate",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TahvoDev/node-red-bluesky.git"
+  },
+  "keywords": [
+    "bluesky"
+  ],
+  "author": "Tahvo",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/TahvoDev/node-red-bluesky/issues"
+  },
+  "homepage": "https://github.com/TahvoDev/node-red-bluesky#readme",
+  "node-red": {
+    "nodes": {
+      "bluesky-config": "bluesky-config.js",
+      "bluesky-post": "bluesky-post.js"
+    }
+  },
+  "dependencies": {
+    "@atproto/api": "^0.15.27"
+  },
+
+  "devDependencies": {
+    "shelljs": "^0.10.0"
+  }
+}

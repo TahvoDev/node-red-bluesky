@@ -1,0 +1,8 @@
+# Ignore install script
+#install-node-red-bluesky.sh
+
+# Ignore package lock
+package-lock.json   
+
+# Ignore node_modules
+node_modules

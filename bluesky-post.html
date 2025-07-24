@@ -1,0 +1,38 @@
+<script type="text/javascript">
+    RED.nodes.registerType('bluesky-post',{
+        category: 'bluesky',
+        color: '#1684FF',
+        defaults: {
+            name: {value:""},
+            config: {value:"", type:"bluesky-config"}
+        },
+        inputs: 1,
+        outputs: 1,
+        icon: "bluesky.svg",
+        paletteLabel: "post",
+        label: function() {
+        if (this.name) {
+          return this.name;
+        }
+        else {
+          var config = RED.nodes.node(this.config);
+          return 'post' + (config ? ' (' + (config.username || '') + ')' : '');
+        }
+      },
+    });
+</script>
+
+<script type="text/html" data-template-name="bluesky-post">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-config"><i class="fa fa-cog"></i> Bluesky Config</label>
+        <input type="text" id="node-input-config">
+    </div>
+</script>
+
+<script type="text/html" data-help-name="bluesky-post">
+    <p>A simple node that converts the message payloads into all lower-case characters</p>
+</script>
