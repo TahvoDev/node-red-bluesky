@@ -2,9 +2,15 @@
   "name": "node-red-bluesky",
   "version": "0.0.1",
   "description": "Unofficial BlueSky Intergration for Node-RED",
-  "main": "bluesky-post.js",
+  "main": "dist/index.js",
   "scripts": {
-    "node-red-check": "node-red-dev validate"
+    "clean": "rm -rf lib dist",
+    "build:ts": "tsc",
+    "build:copy": "node scripts/copy-static-assets.js",
+    "build": "npm run clean && npm run build:ts && npm run build:copy",
+    "copy-static-assets": "node scripts/copy-static-assets.js",
+    "node-red-check": "node-red-dev validate",
+    "prepublishOnly": "npm run build"
   },
   "repository": {
     "type": "git",

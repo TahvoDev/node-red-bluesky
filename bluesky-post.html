@@ -1,24 +1,29 @@
 <script type="text/javascript">
-    RED.nodes.registerType('bluesky-post',{
+    RED.nodes.registerType('bluesky-post', {
         category: 'bluesky',
         color: '#1684FF',
         defaults: {
-            name: {value:""},
-            config: {value:"", type:"bluesky-config"}
+            name: { value: "" },
+            config: { 
+                value: "", 
+                type: "bluesky-config",
+                required: true
+            }
         },
         inputs: 1,
-        outputs: 1,
+        outputs: 0,
         icon: "bluesky.svg",
-        paletteLabel: "post",
+        paletteLabel: "Bluesky Post",
         label: function() {
-        if (this.name) {
-          return this.name;
+            if (this.name) {
+                return this.name;
+            }
+            var config = RED.nodes.node(this.config);
+            return 'Bluesky Post' + (config ? ' (' + (config.username || '') + ')' : '');
+        },
+        labelStyle: function() {
+            return this.name ? "node_label_italic" : "";
         }
-        else {
-          var config = RED.nodes.node(this.config);
-          return 'post' + (config ? ' (' + (config.username || '') + ')' : '');
-        }
-      },
     });
 </script>
 
@@ -28,11 +33,41 @@
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
     <div class="form-row">
-        <label for="node-input-config"><i class="fa fa-cog"></i> Bluesky Config</label>
-        <input type="text" id="node-input-config">
+        <label for="node-input-config"><i class="fa fa-user"></i> Bluesky Account</label>
+        <input type="text" id="node-input-config" placeholder="Bluesky Account">
     </div>
 </script>
 
 <script type="text/html" data-help-name="bluesky-post">
-    <p>A simple node that converts the message payloads into all lower-case characters</p>
+    <p>Posts messages to Bluesky social network.</p>
+    <h3>Inputs</h3>
+    <dl class="message-properties">
+        <dt>payload <span class="property-type">string | object</span></dt>
+        <dd>The message to post. If an object is provided, it will look for a <code>text</code> property or stringify the object.</dd>
+    </dl>
+    
+    <h3>Node Status</h3>
+    <dl class="message-properties">
+        <dt><span class="status-dot" style="background-color: #72c66a"></span> Ready</dt>
+        <dd>Connected to Bluesky and ready to post.</dd>
+        
+        <dt><span class="status-dot" style="background-color: #4594e5"></span> Posting...</dt>
+        <dd>Currently sending the post to Bluesky.</dd>
+        
+        <dt><span class="status-dot" style="background-color: #72c66a"></span> Posted</dt>
+        <dd>Message was successfully posted.</dd>
+        
+        <dt><span class="status-dot" style="background-color: #d13c3c"></span> Error</dt>
+        <dd>An error occurred while posting.</dd>
+        
+        <dt><span class="status-dot" style="background-color: #d13c3c; border-color: #d13c3c"></span> Connection Error</dt>
+        <dd>Failed to connect to Bluesky. Check your credentials.</dd>
+    </dl>
+    
+    <h3>Example</h3>
+    <pre><code>// Simple text post
+msg = {
+    payload: "Hello from Node-RED!"
+};
+return msg;</code></pre>
 </script>
