@@ -1,6 +1,30 @@
 module.exports = function(RED) {
     var blueskyService = require('./lib/bluesky-agent-manager.js');
 
+    function formatPost(msg) {
+        let post;
+        if (typeof msg.payload === 'string' || typeof msg.payload === 'number' || typeof msg.payload === 'boolean') 
+        {
+            post = {
+                text: msg.payload,
+                createdAt: new Date().toISOString()
+            };
+        } 
+        else if (typeof msg.payload === 'object' && msg.payload !== null)
+        {
+            post = {
+                text: msg.payload.text || '',
+                createdAt: msg.payload.date ? new Date(msg.payload.date).toISOString() : new Date().toISOString()
+            };
+        }
+        else
+        {
+            throw new Error('Invalid payload format. Expected string or object with text and optional date.');
+        }
+
+        return post;
+    }
+
     function BlueskyPostNode(config) {
         RED.nodes.createNode(this, config);
         var configNode = RED.nodes.getNode(config.config);
@@ -33,10 +57,7 @@ module.exports = function(RED) {
                         return;
                     }
 
-                    bot.agent.post({
-                        text: message,
-                        createdAt: new Date().toISOString()
-                    })
+                    bot.agent.post(formatPost(msg))
                     .then(() => {
                         node.status({ fill: "green", shape: "dot", text: "posted" });
                     })
@@ -65,4 +86,4 @@ module.exports = function(RED) {
     }
 
     RED.nodes.registerType("bluesky-post", BlueskyPostNode);
-};
+}
