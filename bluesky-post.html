@@ -39,35 +39,122 @@
 </script>
 
 <script type="text/html" data-help-name="bluesky-post">
-    <p>Posts messages to Bluesky social network.</p>
+    <p>Posts messages and media to Bluesky social network with support for various post types.</p>
+    
     <h3>Inputs</h3>
     <dl class="message-properties">
         <dt>payload <span class="property-type">string | object</span></dt>
-        <dd>The message to post. If an object is provided, it will look for a <code>text</code> property or stringify the object.</dd>
+        <dd>
+            The content to post. Can be a string or an object with the following properties:
+            <ul>
+                <li><code>text</code> - (string) The text content of the post (optional if images are provided)</li>
+                <li><code>type</code> - (string) Type of post: 'post', 'reply', 'quote', 'repost', 'like', 'delete', 'unlike', 'unrepost' (default: 'post')</li>
+                <li><code>images</code> - (array) Array of image objects to attach (max 4 images)</li>
+                <li><code>replyTo</code> - (object) Required for 'reply' type</li>
+                <li><code>targetUri</code> - (string) Required for 'repost', 'like', 'delete', 'unlike', 'unrepost' types</li>
+                <li><code>targetCid</code> - (string) Optional CID for the target post</li>
+            </ul>
+        </dd>
     </dl>
+    
+    <h3>Image Objects</h3>
+    <p>When including images, each image object can have:</p>
+    <ul>
+        <li><code>image</code> - (string | Buffer | Uint8Array) Image URL or binary data</li>
+        <li><code>alt</code> - (string) Alternative text for accessibility</li>
+        <li><code>encoding</code> - (string) MIME type (e.g., 'image/jpeg', 'image/png')</li>
+    </ul>
+    
+    <h3>Reply Objects</h3>
+    <p>For 'reply' type, include a reply object with:</p>
+    <ul>
+        <li><code>rootUri</code> - (string) URI of the root post</li>
+        <li><code>parentUri</code> - (string) URI of the parent post</li>
+        <li><code>rootCid</code> - (string, optional) CID of the root post</li>
+        <li><code>parentCid</code> - (string, optional) CID of the parent post</li>
+    </ul>
     
     <h3>Node Status</h3>
     <dl class="message-properties">
         <dt><span class="status-dot" style="background-color: #72c66a"></span> Ready</dt>
         <dd>Connected to Bluesky and ready to post.</dd>
         
-        <dt><span class="status-dot" style="background-color: #4594e5"></span> Posting...</dt>
-        <dd>Currently sending the post to Bluesky.</dd>
+        <dt><span class="status-dot" style="background-color: #4594e5"></span> Processing...</dt>
+        <dd>Processing the post request.</dd>
         
-        <dt><span class="status-dot" style="background-color: #72c66a"></span> Posted</dt>
-        <dd>Message was successfully posted.</dd>
+        <dt><span class="status-dot" style="background-color: #72c66a"></span> [type]</dt>
+        <dd>Post was successfully processed (e.g., 'posted', 'replied', 'liked').</dd>
         
         <dt><span class="status-dot" style="background-color: #d13c3c"></span> Error</dt>
-        <dd>An error occurred while posting.</dd>
+        <dd>An error occurred while processing the request.</dd>
         
         <dt><span class="status-dot" style="background-color: #d13c3c; border-color: #d13c3c"></span> Connection Error</dt>
         <dd>Failed to connect to Bluesky. Check your credentials.</dd>
     </dl>
     
-    <h3>Example</h3>
+    <h3>Examples</h3>
+    
+    <h4>Simple Text Post</h4>
     <pre><code>// Simple text post
 msg = {
     payload: "Hello from Node-RED!"
+};
+return msg;</code></pre>
+    
+    <h4>Post with Image from URL</h4>
+    <pre><code>// Post with image from URL
+msg = {
+    payload: {
+        text: "Check out this image!",
+        images: [{
+            image: "https://example.com/image.jpg",
+            alt: "Example image"
+        }]
+    }
+};
+return msg;</code></pre>
+    
+    <h4>Reply to a Post</h4>
+    <pre><code>// Reply to a post
+msg = {
+    payload: {
+        type: "reply",
+        text: "I agree with this post!",
+        replyTo: {
+            rootUri: "at://did:plc:xxx/app.bsky.feed.post/123",
+            parentUri: "at://did:plc:xxx/app.bsky.feed.post/123"
+        }
+    }
+};
+return msg;</code></pre>
+    
+    <h4>Repost (Boost)</h4>
+    <pre><code>// Repost a post
+msg = {
+    payload: {
+        type: "repost",
+        targetUri: "at://did:plc:xxx/app.bsky.feed.post/123"
+    }
+};
+return msg;</code></pre>
+    
+    <h4>Like a Post</h4>
+    <pre><code>// Like a post
+msg = {
+    payload: {
+        type: "like",
+        targetUri: "at://did:plc:xxx/app.bsky.feed.post/123"
+    }
+};
+return msg;</code></pre>
+    
+    <h4>Delete a Post</h4>
+    <pre><code>// Delete a post (you must own the post)
+msg = {
+    payload: {
+        type: "delete",
+        targetUri: "at://did:plc:xxx/app.bsky.feed.post/123"
+    }
 };
 return msg;</code></pre>
 </script>
