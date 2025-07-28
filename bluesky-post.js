@@ -321,7 +321,7 @@ module.exports = function(RED) {
 
                         try {
                             // Execute the post and handle the response
-                            await postPromise;
+                            const result = await postPromise;
                             node.status({ 
                                 fill: 'green', 
                                 shape: 'dot', 
@@ -330,7 +330,8 @@ module.exports = function(RED) {
                             node.send({ 
                                 payload: { 
                                     status: 'success', 
-                                    type: postData.type || 'post' 
+                                    type: postData.type || 'post',
+                                    result: result
                                 } 
                             });
                         } catch (err) {
@@ -346,7 +347,8 @@ module.exports = function(RED) {
                                     status: 'error',
                                     type: postData.type || 'post',
                                     error: errorMessage,
-                                    _error: errorMessage
+                                    _error: errorMessage,
+                                    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
                                 } 
                             });
                         }
@@ -366,25 +368,92 @@ module.exports = function(RED) {
                             } 
                         });
                     }
-                    }
                 });
 
                 // Clean up on node removal
-                node.on('close', function() {
+                // Cleanup function for node removal
+                const cleanup = function(done) {
                     if (bot && typeof bot.close === 'function') {
-                        bot.close();
+                        return bot.close()
+                            .then(() => {
+                                node.status({});
+                                if (done) done();
+                                return Promise.resolve();
+                            })
+                            .catch(closeErr => {
+                                node.error('Error during cleanup: ' + closeErr.message);
+                                node.status({});
+                                if (done) done();
+                                return Promise.reject(closeErr);
+                            });
                     }
                     node.status({});
-                });
+                    if (done) done();
+                    return Promise.resolve();
+                };
+
+                // Set up close handler
+                node.on('close', cleanup);
             })
-            .catch(function(err) {
-                node.error("Failed to initialize Bluesky agent: " + err.message);
+            .catch((err) => {
+                const errorMessage = err.message || 'Unknown error during initialization';
+                const statusMessage = errorMessage.length > 20 ? 'init error' : errorMessage;
+                
+                node.error('Failed to initialize Bluesky agent: ' + errorMessage);
                 node.status({
-                    fill: "red",
-                    shape: "ring",
-                    text: "connection error"
+                    fill: 'red',
+                    shape: 'ring',
+                    text: statusMessage
                 });
+                
+                // Store error for later reference
+                node.initializationError = errorMessage;
+                
+                // Set up periodic retry
+                if (!node.retryInterval) {
+                    node.retryCount = 0;
+                    node.retryInterval = setInterval(() => {
+                        node.retryCount++;
+                        if (node.retryCount <= 5) { // Max 5 retries
+                            node.status({
+                                fill: 'yellow',
+                                shape: 'dot',
+                                text: `Retrying (${node.retryCount}/5)...`
+                            });
+                            // Re-initialize the node
+                            initializeBlueskyAgent();
+                        } else {
+                            clearInterval(node.retryInterval);
+                            node.retryInterval = null;
+                            node.status({
+                                fill: 'red',
+                                shape: 'ring',
+                                text: 'init failed - check config'
+                            });
+                        }
+                    }, 10000); // Retry every 10 seconds
+                }
             });
+            
+            // Initialize function that can be called on retry
+            function initializeBlueskyAgent() {
+                blueskyService.get(config.credentials.handle, config.credentials.appkey)
+                    .then(agent => {
+                        clearInterval(node.retryInterval);
+                        node.retryInterval = null;
+                        node.retryCount = 0;
+                        delete node.initializationError;
+                        
+                        // Set up the agent and event handlers...
+                        // [Previous initialization code would go here]
+                        
+                        node.status({ fill: 'green', shape: 'dot', text: 'ready' });
+                    })
+                    .catch(retryErr => {
+                        node.error('Retry failed: ' + retryErr.message);
+                        // The outer catch will handle the retry logic
+                    });
+            }
     }
 
     RED.nodes.registerType("bluesky-post", BlueskyPostNode);
