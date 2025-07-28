@@ -1,6 +1,11 @@
 module.exports = function(RED) {
     var blueskyService = require('./lib/bluesky-agent-manager.js');
     const { RichText } = require('@atproto/api');
+    const https = require('https');
+    const { promisify } = require('util');
+    const stream = require('stream');
+    const pipeline = promisify(stream.pipeline);
+    const { v4: uuidv4 } = require('uuid');
 
     /**
      * Process and validate facets in a RichText object
@@ -41,6 +46,56 @@ module.exports = function(RED) {
         return rt;
     }
 
+    /**
+     * Download image from URL and upload as blob
+     * @param {object} agent - Bluesky agent
+     * @param {string} imageUrl - URL of the image to download
+     * @returns {Promise<object>} Blob reference
+     */
+    async function uploadImageFromUrl(agent, imageUrl) {
+        return new Promise((resolve, reject) => {
+            const chunks = [];
+            const client = imageUrl.startsWith('https') ? https : require('http');
+            
+            client.get(imageUrl, async (response) => {
+                if (response.statusCode < 200 || response.statusCode >= 300) {
+                    return reject(new Error(`Failed to download image: ${response.statusCode}`));
+                }
+
+                const contentType = response.headers['content-type'];
+                if (!contentType || !contentType.startsWith('image/')) {
+                    return reject(new Error('URL does not point to a valid image'));
+                }
+
+                response.on('data', (chunk) => chunks.push(chunk));
+                response.on('end', async () => {
+                    try {
+                        const imageData = Buffer.concat(chunks);
+                        if (imageData.length > 5 * 1024 * 1024) {
+                            return reject(new Error('Image size exceeds 5MB limit'));
+                        }
+
+                        // Upload the image as a blob
+                        const blobRef = await agent.uploadBlob(imageData, { 
+                            encoding: contentType || 'image/jpeg',
+                            filename: `image-${uuidv4()}.${contentType.split('/')[1] || 'jpg'}`
+                        });
+                        
+                        resolve(blobRef.data.blob);
+                    } catch (error) {
+                        reject(error);
+                    }
+                });
+            }).on('error', reject);
+        });
+    }
+
+    /**
+     * Format a post with optional embed
+     * @param {object} agent - Bluesky agent
+     * @param {object} msg - The input message
+     * @returns {Promise<object>} Formatted post data
+     */
     async function formatPost(agent, msg) {
         if (typeof msg.payload === 'number' || typeof msg.payload === 'boolean') {
             return {
@@ -63,12 +118,66 @@ module.exports = function(RED) {
         }
         
         if (typeof msg.payload === 'object' && msg.payload !== null) {
-            return {
+            const post = {
                 $type: 'app.bsky.feed.post',
                 text: msg.payload.text || '',
                 facets: msg.payload.facets,
                 createdAt: msg.payload.date ? new Date(msg.payload.date).toISOString() : new Date().toISOString()
             };
+
+            // Handle embed if provided
+            if (msg.payload.embed) {
+                // Process embed asynchronously
+                try {
+                    // Handle website card embed
+                    if (msg.payload.embed.$type === 'app.bsky.embed.external') {
+                        const embedData = {
+                            $type: 'app.bsky.embed.external',
+                            external: {
+                                uri: msg.payload.embed.uri,
+                                title: msg.payload.embed.title || '',
+                                description: msg.payload.embed.description || ''
+                            }
+                        };
+
+                        // Handle thumbnail URL if provided
+                        if (typeof msg.payload.embed.thumb === 'string' && 
+                            (msg.payload.embed.thumb.startsWith('http://') || 
+                             msg.payload.embed.thumb.startsWith('https://'))) {
+                            try {
+                                embedData.external.thumb = await uploadImageFromUrl(agent, msg.payload.embed.thumb);
+                            } catch (error) {
+                                console.warn('Failed to upload thumbnail:', error.message);
+                                // Continue without thumbnail if upload fails
+                            }
+                        } else if (msg.payload.embed.thumb) {
+                            // Use provided thumb as is (assumes it's already a BlobRef)
+                            embedData.external.thumb = msg.payload.embed.thumb;
+                        }
+
+                        post.embed = embedData;
+                    } 
+                // Handle image embed (for reference)
+                else if (msg.payload.embed.$type === 'app.bsky.embed.images' && 
+                         Array.isArray(msg.payload.embed.images)) {
+                    post.embed = {
+                        $type: 'app.bsky.embed.images',
+                        images: msg.payload.embed.images
+                            .filter(img => img && img.image) // Ensure valid images
+                            .slice(0, 4) // Max 4 images
+                    };
+                }
+                    // Handle other embed types by passing them through
+                    else {
+                        post.embed = msg.payload.embed;
+                    }
+                } catch (error) {
+                    console.error('Error processing embed:', error);
+                    throw new Error(`Failed to process embed: ${error.message}`);
+                }
+            }
+
+            return post;
         }
         
         throw new Error('Invalid payload format. Expected string, number, boolean, or object with text and optional date.');
