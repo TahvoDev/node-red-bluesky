@@ -1,15 +1,26 @@
 module.exports = function(RED) {
     var blueskyService = require('./lib/bluesky-agent-manager.js');
 
-    function formatPost(msg) {
+    async function formatPost(agent, msg) {
         let post;
-        if (typeof msg.payload === 'string' || typeof msg.payload === 'number' || typeof msg.payload === 'boolean') 
+        if (typeof msg.payload === 'number' || typeof msg.payload === 'boolean') 
         {
             post = {
                 text: msg.payload,
                 createdAt: new Date().toISOString()
             };
         } 
+        else if (typeof msg.payload === 'string') 
+        {
+            let rt = message.payload.trim();
+            await rt.detectFacets(agent);
+            const postRecord = {
+                $type: 'app.bsky.feed.post',
+                text: rt.text,
+                facets: rt.facets,
+                createdAt: new Date().toISOString(),
+            }
+        }
         else if (typeof msg.payload === 'object' && msg.payload !== null)
         {
             post = {
@@ -57,7 +68,7 @@ module.exports = function(RED) {
                         return;
                     }
 
-                    bot.agent.post(formatPost(msg))
+                    bot.agent.post(formatPost(agent, msg))
                     .then(() => {
                         node.status({ fill: "green", shape: "dot", text: "posted" });
                     })
