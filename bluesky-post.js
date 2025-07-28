@@ -2,6 +2,44 @@ module.exports = function(RED) {
     var blueskyService = require('./lib/bluesky-agent-manager.js');
     const { RichText } = require('@atproto/api');
 
+    /**
+     * Process and validate facets in a RichText object
+     * @param {object} rt - The RichText instance to process
+     * @param {object} agent - The Bluesky agent for facet detection
+     * @returns {Promise<object>} Processed RichText object with validated facets
+     */
+    async function processFacets(rt, agent) {
+        // Only detect facets if the text contains potential mentions or links
+        if (!rt.text.includes('@') && !rt.text.includes('http://') && !rt.text.includes('https://')) {
+            return rt;
+        }
+
+        try {
+            await rt.detectFacets(agent);
+            
+            // Only filter out invalid mentions, keep all other facets
+            if (rt.facets) {
+                rt.facets = rt.facets
+                    .map(facet => ({
+                        ...facet,
+                        features: facet.features.filter(feature => {
+                            // Only filter out invalid mentions, keep all other features
+                            if (feature.$type === 'app.bsky.richtext.facet#mention') {
+                                return feature.did && /^did:[a-z0-9]+:[a-zA-Z0-9._-]+$/.test(feature.did);
+                            }
+                            return true; // Keep all non-mention features
+                        })
+                    }))
+                    .filter(facet => facet.features.length > 0); // Remove facets with no valid features
+            }
+        } catch (err) {
+            // If facet detection fails, just post the text without facets
+            console.warn('Error detecting facets, posting as plain text:', err.message);
+        }
+        
+        return rt;
+    }
+
     async function formatPost(agent, msg) {
         if (typeof msg.payload === 'number' || typeof msg.payload === 'boolean') {
             return {
@@ -13,30 +51,7 @@ module.exports = function(RED) {
         
         if (typeof msg.payload === 'string') {
             const rt = new RichText({ text: msg.payload.trim() });
-            
-            // Only detect facets if the text contains potential mentions or links
-            if (rt.text.includes('@') || rt.text.includes('http://') || rt.text.includes('https://')) {
-                try {
-                    await rt.detectFacets(agent);
-                    // Filter out invalid facets (like email addresses)
-                    if (rt.facets) {
-                        rt.facets = rt.facets.filter(facet => {
-                            // Keep only valid link facets and mentions with valid DIDs
-                            return facet.features.every(feature => {
-                                if (feature.$type === 'app.bsky.richtext.facet#link') return true;
-                                if (feature.$type === 'app.bsky.richtext.facet#mention' && feature.did) {
-                                    // Only keep mentions that look like valid DIDs
-                                    return /^did:[a-z0-9]+:[a-zA-Z0-9._-]+$/.test(feature.did);
-                                }
-                                return false;
-                            });
-                        });
-                    }
-                } catch (err) {
-                    // If facet detection fails, just post the text without facets
-                    console.warn('Error detecting facets, posting as plain text:', err.message);
-                }
-            }
+            await processFacets(rt, agent);
             
             return {
                 $type: 'app.bsky.feed.post',
