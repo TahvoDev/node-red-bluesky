@@ -9,8 +9,8 @@ module.exports = function(RED) {
      * @returns {Promise<object>} Processed RichText object with validated facets
      */
     async function processFacets(rt, agent) {
-        // Only detect facets if the text contains potential mentions or links
-        if (!rt.text.includes('@') && !rt.text.includes('http://') && !rt.text.includes('https://')) {
+        // Only detect facets if the text contains potential mentions, links, or hashtags
+        if (!rt.text.includes('@') && !rt.text.includes('http://') && !rt.text.includes('https://') && !rt.text.includes('#')) {
             return rt;
         }
 
@@ -23,11 +23,12 @@ module.exports = function(RED) {
                     .map(facet => ({
                         ...facet,
                         features: facet.features.filter(feature => {
-                            // Only filter out invalid mentions, keep all other features
+                            // Only filter out invalid mentions, keep all other features including hashtags and links
                             if (feature.$type === 'app.bsky.richtext.facet#mention') {
                                 return feature.did && /^did:[a-z0-9]+:[a-zA-Z0-9._-]+$/.test(feature.did);
                             }
-                            return true; // Keep all non-mention features
+                            // Keep all hashtags and other valid features
+                            return true;
                         })
                     }))
                     .filter(facet => facet.features.length > 0); // Remove facets with no valid features
