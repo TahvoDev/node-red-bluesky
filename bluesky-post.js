@@ -3,18 +3,41 @@ module.exports = function(RED) {
     const { RichText } = require('@atproto/api');
 
     async function formatPost(agent, msg) {
-        let post;
-        if (typeof msg.payload === 'number' || typeof msg.payload === 'boolean') 
-        {
-            post = {
-                text: msg.payload,
+        if (typeof msg.payload === 'number' || typeof msg.payload === 'boolean') {
+            return {
+                $type: 'app.bsky.feed.post',
+                text: msg.payload.toString(),
                 createdAt: new Date().toISOString()
             };
         } 
-        else if (typeof msg.payload === 'string') 
-        {
+        
+        if (typeof msg.payload === 'string') {
             const rt = new RichText({ text: msg.payload.trim() });
-            await rt.detectFacets(agent);
+            
+            // Only detect facets if the text contains potential mentions or links
+            if (rt.text.includes('@') || rt.text.includes('http://') || rt.text.includes('https://')) {
+                try {
+                    await rt.detectFacets(agent);
+                    // Filter out invalid facets (like email addresses)
+                    if (rt.facets) {
+                        rt.facets = rt.facets.filter(facet => {
+                            // Keep only valid link facets and mentions with valid DIDs
+                            return facet.features.every(feature => {
+                                if (feature.$type === 'app.bsky.richtext.facet#link') return true;
+                                if (feature.$type === 'app.bsky.richtext.facet#mention' && feature.did) {
+                                    // Only keep mentions that look like valid DIDs
+                                    return /^did:[a-z0-9]+:[a-zA-Z0-9._-]+$/.test(feature.did);
+                                }
+                                return false;
+                            });
+                        });
+                    }
+                } catch (err) {
+                    // If facet detection fails, just post the text without facets
+                    console.warn('Error detecting facets, posting as plain text:', err.message);
+                }
+            }
+            
             return {
                 $type: 'app.bsky.feed.post',
                 text: rt.text,
@@ -22,19 +45,17 @@ module.exports = function(RED) {
                 createdAt: new Date().toISOString()
             };
         }
-        else if (typeof msg.payload === 'object' && msg.payload !== null)
-        {
-            post = {
+        
+        if (typeof msg.payload === 'object' && msg.payload !== null) {
+            return {
+                $type: 'app.bsky.feed.post',
                 text: msg.payload.text || '',
+                facets: msg.payload.facets,
                 createdAt: msg.payload.date ? new Date(msg.payload.date).toISOString() : new Date().toISOString()
             };
         }
-        else
-        {
-            throw new Error('Invalid payload format. Expected string or object with text and optional date.');
-        }
-
-        return post;
+        
+        throw new Error('Invalid payload format. Expected string, number, boolean, or object with text and optional date.');
     }
 
     function BlueskyPostNode(config) {
